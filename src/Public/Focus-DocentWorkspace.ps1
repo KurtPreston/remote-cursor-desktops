@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 <#
 .SYNOPSIS
 Bring an already-open remote Cursor workspace to the foreground, by explicit
-host/path/name (push-mode; no SSH resolution).
+host/path/name.
 
 .DESCRIPTION
 Locates the Cursor window for the path's leaf and focuses it (Windows: switch to

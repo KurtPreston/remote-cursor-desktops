@@ -2,9 +2,8 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
-Open (or focus) a remote Cursor window for an explicit host/path/name. This is
-the push-mode core: it does NOT resolve anything over SSH -- the caller (a
-webhook from grove, or the CLI) already supplies the remote path.
+Open (or focus) a remote Cursor window for an explicit host/path/name. The
+caller (a webhook from grove, or the CLI) already supplies the remote path.
 
 .DESCRIPTION
 Builds the remote folder URI from host + path, then:

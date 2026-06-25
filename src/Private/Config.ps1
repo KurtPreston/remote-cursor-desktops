@@ -85,9 +85,8 @@ function Get-DocentConfig {
     [CmdletBinding()]
     param([string]$Config)
 
-    # Defaults. Nothing here is required for `docent serve`; the optional
-    # pull-mode fields (host/resolve/list/...) are only validated by the
-    # functions that actually use them.
+    # Defaults. Nothing here is required for `docent serve`; it runs fine on
+    # defaults alone.
     $defaults = @{
         port             = 39787
         token            = $null
@@ -98,15 +97,6 @@ function Get-DocentConfig {
         launchTimeoutSec = 25
         launchRetries    = 2
         launchDelaySec   = 2
-
-        # Optional, pull-mode only.
-        host             = $null
-        project          = $null
-        resolve          = $null
-        list             = $null
-        sshExe           = 'ssh'
-        sshOptions       = @('-o', 'BatchMode=yes')
-        remoteShell      = "bash -lc '{cmd}'"
     }
 
     $cfg = [ordered]@{}
@@ -149,24 +139,4 @@ function Expand-DocentTemplate {
             }
             return $m.Value
         })
-}
-
-# Build the standard substitution context for a given ref/project (pull-mode).
-function New-DocentContext {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][PSCustomObject]$Config,
-        # Empty is valid: `open-all` builds a listing context whose `list`
-        # template does not reference {ref}.
-        [Parameter(Mandatory)][AllowEmptyString()][string]$Ref,
-        [string]$Project,
-        [string]$Path
-    )
-    $proj = if ($Project) { $Project } else { $Config.project }
-    return @{
-        host    = $Config.host
-        project = $proj
-        ref     = $Ref
-        path    = $Path
-    }
 }

@@ -11,7 +11,6 @@ other commands drive the same open/focus logic by hand.
 Usage:
   docent serve     [-Port <n>] [-Config <path>]
   docent open      -Host <h> -Path <p> [-Name <n>] [-Config <path>] [-NoSwitch]
-  docent open-all  [-Project <p>] [-Config <path>] [-NoSwitch]     # pull-mode (SSH)
   docent focus     [-Host <h>] [-Path <p>] [-Name <n>] [-Config <path>]
   docent close     [-Path <p>] [-Name <n>] [-Config <path>] [-RemoveDesktop]
   docent status    [-Config <path>]
@@ -27,7 +26,7 @@ Environment:
 [CmdletBinding()]
 param(
     [Parameter(Mandatory, Position = 0)]
-    [ValidateSet('serve', 'open', 'open-all', 'focus', 'close', 'status', 'help')]
+    [ValidateSet('serve', 'open', 'focus', 'close', 'status', 'help')]
     [string]$Command,
 
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -81,9 +80,6 @@ switch ($Command) {
     }
     'open' {
         Open-DocentWorkspace @named
-    }
-    'open-all' {
-        Open-DocentAll @named
     }
     'focus' {
         Focus-DocentWorkspace @named

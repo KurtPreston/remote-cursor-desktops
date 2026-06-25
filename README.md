@@ -47,7 +47,7 @@ vscode-remote://ssh-remote+{host}{path}
 
 and then **focuses** an existing Cursor window for that workspace, or **opens** a
 new one. Because the path arrives in the payload, docent does **not** SSH out to
-resolve anything — this is push-mode, the inverse of the old pull-based flow.
+resolve anything — the sender already knows the remote path.
 
 ## Requirements
 
@@ -214,7 +214,7 @@ logic by hand.
 # Start the webhook receiver (primary).
 pwsh ./bin/docent.ps1 serve [-Port 39787] [-Config <path>]
 
-# Open or focus one workspace explicitly (push-mode; no SSH).
+# Open or focus one workspace explicitly (no SSH).
 pwsh ./bin/docent.ps1 open -Host ubuntu -Path /home/me/Code/salsa/my-feature -Name my-feature
 
 # Focus an already-open workspace.
@@ -225,9 +225,6 @@ pwsh ./bin/docent.ps1 close -Name my-feature -RemoveDesktop
 
 # Show what docent can see (windows; desktops on Windows).
 pwsh ./bin/docent.ps1 status
-
-# Pull-mode: enumerate all workspaces over SSH and open one each (needs host+list).
-pwsh ./bin/docent.ps1 open-all
 ```
 
 Or import the module and call the cmdlets directly:
@@ -256,7 +253,6 @@ field. Discovery order (first hit wins): `-Config <path>`, `$DOCENT_CONFIG`,
 | `desktopName` | `{name}` | desktop name (Win) / window label (macOS) |
 | `uri` | `vscode-remote://ssh-remote+{host}{path}` | folder URI template |
 | `launchTimeoutSec` / `launchRetries` / `launchDelaySec` | `25` / `2` / `2` | Windows folder-uri hang mitigations |
-| `host`, `resolve`, `list`, `sshExe`, `sshOptions`, `remoteShell` | — | **pull-mode only** (`open-all`) |
 
 The JSONC loader strips `//` and `/* */` comments and trailing commas while
 **preserving string literals**, so `vscode-remote://…` inside `uri` is never
@@ -283,7 +279,7 @@ switches Spaces.
 ## Layout
 
 ```
-bin/docent.ps1            # CLI dispatcher (serve / open / focus / close / status / open-all)
+bin/docent.ps1            # CLI dispatcher (serve / open / focus / close / status)
 src/Docent.psd1           # module manifest
 src/Docent.psm1           # loader (dot-sources Private + Public)
 src/Private/
@@ -294,12 +290,10 @@ src/Private/
   Desktop.ps1             # Windows virtual-desktop wrappers (VirtualDesktop)
   Window.ps1              # Windows Cursor launch + window matching
   Native.ps1              # Windows Win32 interop (window enumeration/focus)
-  Resolver.ps1            # SSH resolver (pull-mode only)
 src/Public/
   Start-DocentServer.ps1  # HttpListener webhook receiver (serve)
   Open-DocentWorkspace.ps1
   Focus-DocentWorkspace.ps1
   Close-DocentWorkspace.ps1
   Get-DocentStatus.ps1
-  Open-DocentAll.ps1      # pull-mode enumeration
 ```

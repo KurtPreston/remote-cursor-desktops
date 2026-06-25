@@ -9,7 +9,6 @@
     FunctionsToExport = @(
         'Start-DocentServer',
         'Open-DocentWorkspace',
-        'Open-DocentAll',
         'Focus-DocentWorkspace',
         'Close-DocentWorkspace',
         'Get-DocentStatus'

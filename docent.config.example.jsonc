@@ -39,14 +39,4 @@
   "launchTimeoutSec": 25,
   "launchRetries": 2,
   "launchDelaySec": 2
-
-  // --- Optional, PULL-MODE ONLY (`docent open-all`) ---
-  // Not used by `serve`; only the SSH enumeration path reads these.
-  // "host": "ubuntu",
-  // "project": "salsa",
-  // "resolve": "echo /home/me/Code/{project}/{ref}",
-  // "list": "for d in /home/me/Code/{project}/*/; do printf '%s\\t%s\\n' \"$(basename \"$d\")\" \"${d%/}\"; done",
-  // "sshExe": "ssh",
-  // "sshOptions": ["-o", "BatchMode=yes"],
-  // "remoteShell": "bash -lc '{cmd}'"
 }
