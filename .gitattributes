@@ -1,0 +1,11 @@
+# Normalize all text files to LF in the repository AND the working tree.
+# docent is cross-platform (Windows + macOS/Linux) and PowerShell 7 reads LF
+# fine on Windows, so LF everywhere keeps diffs clean and avoids stray ^M.
+* text=auto eol=lf
+
+*.ps1   text eol=lf
+*.psd1  text eol=lf
+*.psm1  text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
