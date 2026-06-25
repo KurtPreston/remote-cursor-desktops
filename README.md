@@ -1,106 +1,244 @@
-# remote-cursor-desktops (`rcd`)
+# docent
 
-A Windows-side tool that manages **one remote Cursor window per workspace, each
-pinned to its own named Windows virtual desktop**. It launches `Cursor.exe`
-locally on Windows and lets Remote-SSH connect each window to a folder on a
-remote host.
+**docent** is a small, cross-platform (Windows + macOS) local daemon that listens
+for webhooks and brings the right remote Cursor workspace into focus on **this**
+machine. It is the *receiver* half of a loosely-coupled pair: the *sender* is
+[grove](https://github.com/KurtPreston/grove) (command `wt`) running on a remote
+dev box. The only contract between them is a webhook body — `{host, path, name}`.
 
-The tool has **no git/worktree knowledge baked in**. How a workspace identifier
-maps to a remote folder path is *configuration* — a command run over SSH whose
-stdout is the folder path. A literal path or any script that prints a path works
-identically.
+```
+ dev box (grove / wt)                         workstation (docent)
+ ────────────────────                         ──────────────────────
+ POST /open  ───────► 127.0.0.1:39787 ──┐
+ {host,path,name}                        │  reverse SSH tunnel
+                                         └─► 127.0.0.1:39787  docent serve
+                                                    │
+                                                    ▼
+                                      open-or-focus a remote Cursor window
+                                      (Windows: on a named virtual desktop;
+                                       macOS: window raised, no Spaces)
+```
+
+Cursor + Windows virtual desktops are just the first backend, not the core idea.
+
+## How it works
+
+grove POSTs JSON to `http://127.0.0.1:<port>/open` (default port **39787**),
+reaching this machine through a **reverse SSH tunnel**. The body is:
+
+```json
+{
+  "host": "<ssh host alias>",
+  "path": "<remote absolute worktree path>",
+  "name": "<workspace / desktop name>"
+}
+```
+
+- `host` — the Remote-SSH host alias docent connects to (e.g. `ubuntu`).
+- `path` — the remote folder to open.
+- `name` — the virtual-desktop name (Windows) / window label (macOS); also used
+  to match an existing window for focus-vs-open.
+
+docent builds the Remote-SSH folder URI as:
+
+```
+vscode-remote://ssh-remote+{host}{path}
+```
+
+and then **focuses** an existing Cursor window for that workspace, or **opens** a
+new one. Because the path arrives in the payload, docent does **not** SSH out to
+resolve anything — this is push-mode, the inverse of the old pull-based flow.
 
 ## Requirements
 
-- Native **Windows PowerShell 5.1+** (or PowerShell 7+).
-- [`VirtualDesktop`](https://github.com/MScholtes/PSVirtualDesktop) module:
+- **PowerShell 7+** (`pwsh`), cross-platform.
+- **Windows:**
+  [`VirtualDesktop`](https://github.com/MScholtes/PSVirtualDesktop) module plus
+  the bundled Win32 interop:
   ```powershell
   Install-Module VirtualDesktop -Scope CurrentUser
   ```
-- `Cursor.exe` installed (auto-detected at `…\AppData\Local\Programs\cursor\`).
-- **Key-based SSH** to the remote host (the resolver runs non-interactively).
+  `Cursor.exe` is auto-detected at `…\AppData\Local\Programs\cursor\`.
+- **macOS:** the `cursor` CLI (or `Cursor.app`) and **Accessibility permission**
+  for whatever runs `osascript` (e.g. the terminal / pwsh host), so docent can
+  raise windows via System Events.
 
-## Setup
+## Quick start
 
-1. Copy the example config and edit it:
-   ```powershell
-   Copy-Item rcd.config.example.jsonc rcd.config.jsonc
+1. Start the receiver:
+   ```bash
+   pwsh ./bin/docent.ps1 serve
    ```
-   Or place it at `$HOME\.config\rcd\config.jsonc`, or point `$env:RCD_CONFIG`
-   at any path.
+   It binds `http://127.0.0.1:39787/` (127.0.0.1 only — never a public
+   interface) and logs to stderr.
 
-2. (Optional) Add `bin\` to your `PATH`, or call the dispatcher directly.
+2. Health check:
+   ```bash
+   curl http://127.0.0.1:39787/health      # -> ok
+   ```
 
-## Usage
+3. Fire an open (normally grove does this):
+   ```bash
+   curl -X POST http://127.0.0.1:39787/open \
+     -H 'content-type: application/json' \
+     -d '{"host":"ubuntu","path":"/home/me/Code/salsa/my-feature","name":"my-feature"}'
+   ```
+   On Windows the new window lands on a virtual desktop named `my-feature`; on
+   macOS the window is raised.
+
+## Reverse SSH tunnel
+
+The dev box must reach docent's localhost port. Add a `RemoteForward` to the
+**workstation's** `~/.ssh/config` entry for the dev host:
+
+```sshconfig
+Host ubuntu
+  HostName dev-box.example.com
+  User me
+  RemoteForward 39787 127.0.0.1:39787
+```
+
+Now when you SSH from the workstation to the dev box, the dev box's
+`POST 127.0.0.1:39787` is forwarded back to docent on the workstation. (Set
+`ExitOnForwardFailure yes` and an `autossh`/keepalive setup if you want the
+tunnel to be resilient.)
+
+## Autostart
+
+**Windows** — a Startup shortcut or a Task Scheduler task running:
+
+```
+pwsh -NoLogo -File <repo>\bin\docent.ps1 serve
+```
+
+To create a logon task from an elevated PowerShell:
 
 ```powershell
-# Open one workspace: resolve -> ensure desktop -> launch window -> place + switch
-./bin/rcd.ps1 open my-feature
+$action  = New-ScheduledTaskAction -Execute 'pwsh' -Argument "-NoLogo -File $PWD\bin\docent.ps1 serve"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName 'docent' -Action $action -Trigger $trigger
+```
 
-# Different project than the config default, don't switch to it
-./bin/rcd.ps1 open my-feature -Project salsa -NoSwitch
+**macOS** — a launchd LaunchAgent at `~/Library/LaunchAgents/com.docent.plist`:
 
-# Open every workspace returned by the `list` template, one desktop each
-./bin/rcd.ps1 open-all
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.docent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/pwsh</string>
+    <string>/Users/me/Code/docent/bin/docent.ps1</string>
+    <string>serve</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>/tmp/docent.log</string>
+</dict>
+</plist>
+```
 
-# Jump to a workspace's desktop (and foreground its window)
-./bin/rcd.ps1 focus my-feature
+```bash
+launchctl load ~/Library/LaunchAgents/com.docent.plist
+```
 
-# Close a workspace's window(s); optionally remove the desktop too
-./bin/rcd.ps1 close my-feature -RemoveDesktop
+## CLI
 
-# Show ref -> desktop -> window mapping
-./bin/rcd.ps1 status
+`serve` is the primary entrypoint; the other commands drive the same open/focus
+logic by hand.
+
+```bash
+# Start the webhook receiver (primary).
+pwsh ./bin/docent.ps1 serve [-Port 39787] [-Config <path>]
+
+# Open or focus one workspace explicitly (push-mode; no SSH).
+pwsh ./bin/docent.ps1 open -Host ubuntu -Path /home/me/Code/salsa/my-feature -Name my-feature
+
+# Focus an already-open workspace.
+pwsh ./bin/docent.ps1 focus -Path /home/me/Code/salsa/my-feature
+
+# Close a workspace's window(s); on Windows optionally remove the desktop.
+pwsh ./bin/docent.ps1 close -Name my-feature -RemoveDesktop
+
+# Show what docent can see (windows; desktops on Windows).
+pwsh ./bin/docent.ps1 status
+
+# Pull-mode: enumerate all workspaces over SSH and open one each (needs host+list).
+pwsh ./bin/docent.ps1 open-all
 ```
 
 Or import the module and call the cmdlets directly:
 
 ```powershell
-Import-Module ./src/RemoteCursorDesktops.psd1
-Open-RcdWorkspace -Ref my-feature
+Import-Module ./src/Docent.psd1
+Start-DocentServer -Port 39787
+Open-DocentWorkspace -Host ubuntu -Path /home/me/Code/salsa/my-feature -Name my-feature
 ```
 
-Set `RCD_LOG_LEVEL=debug` for verbose tracing (all logs go to **stderr**;
-command results go to **stdout**).
+Set `DOCENT_LOG_LEVEL=debug` for verbose tracing (all logs go to **stderr**;
+command/HTTP results go to **stdout** / the response body).
 
 ## Config
 
-See [`rcd.config.example.jsonc`](./rcd.config.example.jsonc) for every field and
-its default. Required fields: `host`, `resolve`. Templates support `{host}`,
-`{project}`, `{ref}`, and (for `uri`) `{path}`.
+`docent serve` runs fine on defaults — **the only thing it needs is a port**.
+See [`docent.config.example.jsonc`](./docent.config.example.jsonc) for every
+field. Discovery order (first hit wins): `-Config <path>`, `$DOCENT_CONFIG`,
+`./docent.config.json(c)`, `$HOME/.config/docent/config.json(c)`.
 
-## Status / the folder-uri no-op
+| Field | Default | Purpose |
+| --- | --- | --- |
+| `port` | `39787` | localhost port the receiver binds |
+| `processName` | `Cursor` | process name used to match windows |
+| `cursorExe` | auto | explicit Cursor launcher (Win/macOS) |
+| `desktopName` | `{name}` | desktop name (Win) / window label (macOS) |
+| `uri` | `vscode-remote://ssh-remote+{host}{path}` | folder URI template |
+| `launchTimeoutSec` / `launchRetries` / `launchDelaySec` | `25` / `2` / `2` | Windows folder-uri hang mitigations |
+| `host`, `resolve`, `list`, `sshExe`, `sshOptions`, `remoteShell` | — | **pull-mode only** (`open-all`) |
 
-Validated on real Windows hardware (Windows 11, PowerShell 7) against a Linux
-remote. The headline risk — the
-[`--folder-uri vscode-remote://` no-op](https://forum.cursor.com/t/remote-workspace-folder-uri-vscode-remote-does-nothing-script-hangs-when-cursor-already-open/153009)
-when a Cursor instance is already running — was reproduced and fixed:
+The JSONC loader strips `//` and `/* */` comments and trailing commas while
+**preserving string literals**, so `vscode-remote://…` inside `uri` is never
+mistaken for a comment.
 
-- **Reproduced:** re-opening a workspace that is *already open* makes
-  `--new-window --folder-uri <same folder>` a no-op. Cursor just refocuses the
-  existing window; no new window is ever created, so new-window polling waits
-  out the full timeout on every retry and then fails.
-- **Fix — idempotent adopt:** before launching, `open` checks for an existing
-  window for that workspace (host-aware title match) and, if present, adopts it
-  (moves it to the named desktop + focuses) instead of trying to spawn a
-  duplicate Cursor refuses to create. Opening a *new* folder still launches
-  normally.
+## OS backends
 
-Launch of a genuinely-new window is still made robust by:
+docent selects a backend at runtime (`$IsWindows` / `$IsMacOS`). Both implement
+the same handler operations (`src/Private/Backend.ps1`):
 
-- non-blocking launch via `Start-Process` (won't hang the script),
-- polling for the **new** window whose title matches the workspace,
-- retry with a short delay (`launchRetries` / `launchDelaySec`).
+| Operation | Windows | macOS |
+| --- | --- | --- |
+| `EnsureWorkspaceTarget(name)` | find/create a virtual desktop | no-op |
+| `OpenWindow(uri, leaf)` | launch `Cursor.exe`, poll for HWND | `cursor`/`open`, poll via osascript |
+| `FindWindow(leaf)` | host-aware window title match | osascript title match |
+| `FocusWindow(handle, name)` | switch desktop + foreground | `AXRaise` + frontmost |
+| `PlaceWindow(handle, name)` | move window to desktop | no-op (window-only) |
 
-Because adoption handles the already-open case directly, the previously-planned
-`--file-uri`/`.code-workspace` and kill-relaunch fallbacks proved unnecessary.
+The Windows backend preserves the original folder-uri hang mitigations:
+non-blocking `Start-Process` launch, polling for the new window by title leaf,
+and retry with a short delay. macOS is **window-only** — it never creates or
+switches Spaces.
 
 ## Layout
 
 ```
-bin/rcd.ps1                     # CLI dispatcher
-src/RemoteCursorDesktops.psd1   # module manifest
-src/RemoteCursorDesktops.psm1   # loader (dot-sources Private + Public)
-src/Private/                    # Logging, Native interop, Config, Resolver, Desktop, Window
-src/Public/                     # Open/Open-All/Focus/Close/Status cmdlets
+bin/docent.ps1            # CLI dispatcher (serve / open / focus / close / status / open-all)
+src/Docent.psd1           # module manifest
+src/Docent.psm1           # loader (dot-sources Private + Public)
+src/Private/
+  Logging.ps1             # stderr logging (DOCENT_LOG_LEVEL)
+  Config.ps1              # JSONC loader + templating
+  Backend.ps1             # runtime OS-backend dispatch
+  Backend.macos.ps1       # macOS window control via cursor CLI + osascript
+  Desktop.ps1             # Windows virtual-desktop wrappers (VirtualDesktop)
+  Window.ps1              # Windows Cursor launch + window matching
+  Native.ps1              # Windows Win32 interop (window enumeration/focus)
+  Resolver.ps1            # SSH resolver (pull-mode only)
+src/Public/
+  Start-DocentServer.ps1  # HttpListener webhook receiver (serve)
+  Open-DocentWorkspace.ps1
+  Focus-DocentWorkspace.ps1
+  Close-DocentWorkspace.ps1
+  Get-DocentStatus.ps1
+  Open-DocentAll.ps1      # pull-mode enumeration
 ```

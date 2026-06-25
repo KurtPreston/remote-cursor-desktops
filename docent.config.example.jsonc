@@ -1,0 +1,46 @@
+{
+  // ---------------------------------------------------------------------------
+  // docent config. EVERYTHING here is optional: `docent serve` runs on defaults
+  // alone. Copy to docent.config.jsonc (or $HOME/.config/docent/config.jsonc, or
+  // point $DOCENT_CONFIG at any path) and edit as needed.
+  // ---------------------------------------------------------------------------
+
+  // Port the webhook receiver binds on (127.0.0.1 only). grove POSTs here
+  // through the reverse SSH tunnel. Must match the tunnel's RemoteForward.
+  "port": 39787,
+
+  // Cursor process name used to enumerate/match windows.
+  "processName": "Cursor",
+
+  // Optional explicit Cursor launcher. Auto-detected when omitted:
+  //   Windows: %LOCALAPPDATA%\Programs\cursor\Cursor.exe (or Program Files)
+  //   macOS:   the `cursor` CLI on PATH, else `open -na Cursor`
+  // "cursorExe": "C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\Cursor.exe",
+
+  // Virtual-desktop name (Windows) / window label (macOS). Templated with the
+  // webhook's {name} (falls back to the path leaf when name is absent).
+  "desktopName": "{name}",
+
+  // Remote-SSH folder URI opened by Cursor. {host} and {path} come straight
+  // from the webhook body. (The `//` inside this string is preserved by the
+  // JSONC loader -- it is NOT a comment.)
+  "uri": "vscode-remote://ssh-remote+{host}{path}",
+
+  // --- Windows folder-uri hang mitigations (defaults shown) ---
+  // Ride out the known `--folder-uri vscode-remote://` no-op when Cursor is
+  // already running: non-blocking launch, poll for the new window by title
+  // leaf, retry with a short delay.
+  "launchTimeoutSec": 25,
+  "launchRetries": 2,
+  "launchDelaySec": 2
+
+  // --- Optional, PULL-MODE ONLY (`docent open-all`) ---
+  // Not used by `serve`; only the SSH enumeration path reads these.
+  // "host": "ubuntu",
+  // "project": "salsa",
+  // "resolve": "echo /home/me/Code/{project}/{ref}",
+  // "list": "for d in /home/me/Code/{project}/*/; do printf '%s\\t%s\\n' \"$(basename \"$d\")\" \"${d%/}\"; done",
+  // "sshExe": "ssh",
+  // "sshOptions": ["-o", "BatchMode=yes"],
+  // "remoteShell": "bash -lc '{cmd}'"
+}

@@ -1,26 +1,33 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-rcd - remote-cursor-desktops CLI dispatcher.
+docent - cross-platform CLI dispatcher for the Docent module.
 
 .DESCRIPTION
-Thin wrapper around the RemoteCursorDesktops module.
+docent is a localhost-only webhook receiver that brings the right remote Cursor
+workspace into focus on this machine. `serve` is the primary entrypoint; the
+other commands drive the same open/focus logic by hand.
 
 Usage:
-  rcd open      <ref> [-Project <p>] [-Config <path>] [-NoSwitch]
-  rcd open-all  [-Project <p>] [-Config <path>] [-NoSwitch]
-  rcd focus     <ref> [-Project <p>] [-Config <path>]
-  rcd close     <ref> [-Project <p>] [-Config <path>] [-RemoveDesktop]
-  rcd status    [-Project <p>] [-Config <path>]
+  docent serve     [-Port <n>] [-Config <path>]
+  docent open      -Host <h> -Path <p> [-Name <n>] [-Config <path>] [-NoSwitch]
+  docent open-all  [-Project <p>] [-Config <path>] [-NoSwitch]     # pull-mode (SSH)
+  docent focus     [-Host <h>] [-Path <p>] [-Name <n>] [-Config <path>]
+  docent close     [-Path <p>] [-Name <n>] [-Config <path>] [-RemoveDesktop]
+  docent status    [-Config <path>]
+  docent help
+
+Webhook contract (POST /open):
+  { "host": "<ssh host alias>", "path": "<remote absolute path>", "name": "<workspace name>" }
 
 Environment:
-  RCD_CONFIG     default config path
-  RCD_LOG_LEVEL  debug | info | warn | error  (default: info)
+  DOCENT_CONFIG     default config path
+  DOCENT_LOG_LEVEL  debug | info | warn | error  (default: info)
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory, Position = 0)]
-    [ValidateSet('open', 'open-all', 'focus', 'close', 'status', 'help')]
+    [ValidateSet('serve', 'open', 'open-all', 'focus', 'close', 'status', 'help')]
     [string]$Command,
 
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -30,14 +37,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$modulePath = Join-Path $PSScriptRoot '../src/RemoteCursorDesktops.psd1'
+$modulePath = Join-Path $PSScriptRoot '../src/Docent.psd1'
 Import-Module $modulePath -Force -DisableNameChecking
 
 # Split remaining args into positionals and -Name/value (or -Switch) options.
-function ConvertTo-RcdParams {
+function ConvertTo-DocentParams {
     param([string[]]$InputArgs)
     # $Rest is $null (not an empty array) when no remaining args are supplied,
-    # e.g. `rcd status` / `rcd open-all`. StrictMode forbids .Count on $null.
+    # e.g. `docent status` / `docent serve`. StrictMode forbids .Count on $null.
     if (-not $InputArgs) { $InputArgs = @() }
     $positional = @()
     $named = @{}
@@ -64,28 +71,28 @@ function ConvertTo-RcdParams {
     return @{ Positional = $positional; Named = $named }
 }
 
-$parsed = ConvertTo-RcdParams -InputArgs $Rest
+$parsed = ConvertTo-DocentParams -InputArgs $Rest
 $pos = $parsed.Positional
 $named = $parsed.Named
 
 switch ($Command) {
+    'serve' {
+        Start-DocentServer @named
+    }
     'open' {
-        if ($pos.Count -lt 1) { throw "Usage: rcd open <ref> [-Project p] [-Config path] [-NoSwitch]" }
-        Open-RcdWorkspace -Ref $pos[0] @named
+        Open-DocentWorkspace @named
     }
     'open-all' {
-        Open-RcdAll @named
+        Open-DocentAll @named
     }
     'focus' {
-        if ($pos.Count -lt 1) { throw "Usage: rcd focus <ref> [-Project p] [-Config path]" }
-        Focus-RcdWorkspace -Ref $pos[0] @named
+        Focus-DocentWorkspace @named
     }
     'close' {
-        if ($pos.Count -lt 1) { throw "Usage: rcd close <ref> [-Project p] [-Config path] [-RemoveDesktop]" }
-        Close-RcdWorkspace -Ref $pos[0] @named
+        Close-DocentWorkspace @named
     }
     'status' {
-        Get-RcdStatus @named
+        Get-DocentStatus @named
     }
     'help' {
         Get-Help $PSCommandPath -Detailed

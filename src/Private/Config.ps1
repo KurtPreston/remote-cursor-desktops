@@ -2,34 +2,42 @@ Set-StrictMode -Version Latest
 
 # Default config search order (first hit wins):
 #   1. -Config <path> (handled by callers)
-#   2. $env:RCD_CONFIG
-#   3. ./rcd.config.json(c) in the current directory
-#   4. $HOME/.config/rcd/config.json(c)
-function Get-RcdConfigPath {
+#   2. $env:DOCENT_CONFIG
+#   3. ./docent.config.json(c) in the current directory
+#   4. $HOME/.config/docent/config.json(c)
+#
+# Returns $null when no config file is found. docent serve runs fine on
+# defaults alone, so a missing config is not an error.
+function Get-DocentConfigPath {
     [CmdletBinding()]
     param([string]$Config)
 
     $candidates = @()
     if ($Config) { $candidates += $Config }
-    if ($env:RCD_CONFIG) { $candidates += $env:RCD_CONFIG }
-    $candidates += (Join-Path (Get-Location) 'rcd.config.jsonc')
-    $candidates += (Join-Path (Get-Location) 'rcd.config.json')
+    if ($env:DOCENT_CONFIG) { $candidates += $env:DOCENT_CONFIG }
+    $candidates += (Join-Path (Get-Location) 'docent.config.jsonc')
+    $candidates += (Join-Path (Get-Location) 'docent.config.json')
     if ($HOME) {
-        $candidates += (Join-Path $HOME '.config/rcd/config.jsonc')
-        $candidates += (Join-Path $HOME '.config/rcd/config.json')
+        $candidates += (Join-Path $HOME '.config/docent/config.jsonc')
+        $candidates += (Join-Path $HOME '.config/docent/config.json')
     }
 
     foreach ($c in $candidates) {
         if ($c -and (Test-Path -LiteralPath $c)) { return (Resolve-Path -LiteralPath $c).Path }
     }
-    throw "No config file found. Looked in: $($candidates -join ', ')"
+
+    # An explicit -Config / $DOCENT_CONFIG that does not exist is a hard error;
+    # otherwise a missing config simply means "use defaults".
+    if ($Config) { throw "Config file not found: $Config" }
+    if ($env:DOCENT_CONFIG) { throw "Config file not found (DOCENT_CONFIG): $($env:DOCENT_CONFIG)" }
+    return $null
 }
 
 # Strip // line comments and /* */ block comments and trailing commas from a
 # JSONC string, while preserving anything inside string literals (critical: our
 # `uri` template contains `vscode-remote://...`, which must NOT be treated as a
 # comment).
-function Remove-RcdJsonComments {
+function Remove-DocentJsonComments {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Text)
 
@@ -73,46 +81,52 @@ function Remove-RcdJsonComments {
     return [regex]::Replace($sb.ToString(), ',(\s*[}\]])', '$1')
 }
 
-function Get-RcdConfig {
+function Get-DocentConfig {
     [CmdletBinding()]
     param([string]$Config)
 
-    $path = Get-RcdConfigPath -Config $Config
-    Write-RcdDebug "Loading config: $path"
-    $raw = Get-Content -LiteralPath $path -Raw
-    $clean = Remove-RcdJsonComments -Text $raw
-
-    try {
-        $obj = $clean | ConvertFrom-Json
-    }
-    catch {
-        throw "Failed to parse config '$path': $($_.Exception.Message)"
-    }
-
-    # Defaults.
+    # Defaults. Nothing here is required for `docent serve`; the optional
+    # pull-mode fields (host/resolve/list/...) are only validated by the
+    # functions that actually use them.
     $defaults = @{
+        port             = 39787
+        processName      = 'Cursor'
+        cursorExe        = $null
+        desktopName      = '{name}'
+        uri              = 'vscode-remote://ssh-remote+{host}{path}'
+        launchTimeoutSec = 25
+        launchRetries    = 2
+        launchDelaySec   = 2
+
+        # Optional, pull-mode only.
         host             = $null
         project          = $null
         resolve          = $null
         list             = $null
-        uri              = 'vscode-remote://ssh-remote+{host}{path}'
-        desktopName      = '{ref}'
-        cursorExe        = $null
-        processName      = 'Cursor'
         sshExe           = 'ssh'
         sshOptions       = @('-o', 'BatchMode=yes')
         remoteShell      = "bash -lc '{cmd}'"
-        launchTimeoutSec = 25
-        launchRetries    = 2
-        launchDelaySec   = 2
     }
 
     $cfg = [ordered]@{}
     foreach ($k in $defaults.Keys) { $cfg[$k] = $defaults[$k] }
-    foreach ($p in $obj.PSObject.Properties) { $cfg[$p.Name] = $p.Value }
 
-    if (-not $cfg.host) { throw "Config '$path' is missing required field 'host'." }
-    if (-not $cfg.resolve) { throw "Config '$path' is missing required field 'resolve'." }
+    $path = Get-DocentConfigPath -Config $Config
+    if ($path) {
+        Write-DocentDebug "Loading config: $path"
+        $raw = Get-Content -LiteralPath $path -Raw
+        $clean = Remove-DocentJsonComments -Text $raw
+        try {
+            $obj = $clean | ConvertFrom-Json
+        }
+        catch {
+            throw "Failed to parse config '$path': $($_.Exception.Message)"
+        }
+        foreach ($p in $obj.PSObject.Properties) { $cfg[$p.Name] = $p.Value }
+    }
+    else {
+        Write-DocentDebug "No config file found; using defaults."
+    }
 
     $cfg['_path'] = $path
     return [PSCustomObject]$cfg
@@ -120,7 +134,7 @@ function Get-RcdConfig {
 
 # Replace {key} tokens in a template from a context hashtable. Unknown tokens
 # are left intact so partially-templated strings remain debuggable.
-function Expand-RcdTemplate {
+function Expand-DocentTemplate {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Template,
@@ -136,8 +150,8 @@ function Expand-RcdTemplate {
         })
 }
 
-# Build the standard substitution context for a given ref/project.
-function New-RcdContext {
+# Build the standard substitution context for a given ref/project (pull-mode).
+function New-DocentContext {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][PSCustomObject]$Config,

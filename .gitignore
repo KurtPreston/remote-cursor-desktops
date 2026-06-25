@@ -1,6 +1,6 @@
 # Local config (may contain host-specific paths)
-rcd.config.json
-rcd.config.jsonc
+docent.config.json
+docent.config.jsonc
 
 # PowerShell / editor noise
 *.log

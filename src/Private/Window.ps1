@@ -1,10 +1,11 @@
 Set-StrictMode -Version Latest
 
-# Window manager: launch a remote Cursor window and reliably find its HWND, plus
-# focus/close helpers keyed on the worktree folder name.
+# Windows window manager: launch a remote Cursor window and reliably find its
+# HWND, plus focus/close helpers keyed on the worktree folder name. macOS uses
+# the osascript-based helpers in Backend.macos.ps1 instead.
 
 # Locate Cursor.exe: explicit config wins, then the standard per-user install.
-function Resolve-RcdCursorExe {
+function Resolve-DocentCursorExe {
     [CmdletBinding()]
     param([PSCustomObject]$Config)
 
@@ -27,13 +28,13 @@ function Resolve-RcdCursorExe {
 }
 
 # The basename of a (POSIX or Windows) path, used to match window titles.
-function Get-RcdLeafName {
+function Get-DocentLeafName {
     param([Parameter(Mandatory)][string]$Path)
     return (($Path -replace '\\', '/').TrimEnd('/') -split '/')[-1]
 }
 
 # Cursor windows currently visible (filtered by process name).
-function Get-RcdCursorWindows {
+function Get-DocentCursorWindows {
     [CmdletBinding()]
     param([PSCustomObject]$Config)
 
@@ -41,7 +42,7 @@ function Get-RcdCursorWindows {
     $procIds = @(Get-Process -Name $procName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id)
     if ($procIds.Count -eq 0) { return @() }
 
-    Get-RcdAllWindows | Where-Object { $procIds -contains $_.Pid }
+    Get-DocentAllWindows | Where-Object { $procIds -contains $_.Pid }
 }
 
 # Decide whether a window title belongs to a given remote workspace. Matching is
@@ -51,7 +52,7 @@ function Get-RcdCursorWindows {
 #   "<file> - <leaf> [SSH: <host>] - Cursor"   (a file is open)
 # and, transiently right after launch (before the remote marker renders),
 #   "<leaf> - Cursor".
-function Test-RcdWorkspaceWindow {
+function Test-DocentWorkspaceWindow {
     [CmdletBinding()]
     param(
         [AllowEmptyString()][AllowNull()][string]$Title,
@@ -75,25 +76,26 @@ function Test-RcdWorkspaceWindow {
 # Mitigates the known `--folder-uri vscode-remote://` hang/no-op when Cursor is
 # already running: non-blocking launch (Start-Process), poll for a NEW window
 # whose title contains the folder leaf, and retry with a short delay.
-function Open-RcdCursorWindow {
+function Open-DocentCursorWindow {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][PSCustomObject]$Config,
         [Parameter(Mandatory)][string]$Uri,
-        [Parameter(Mandatory)][string]$LeafName
+        [Parameter(Mandatory)][string]$LeafName,
+        [string]$RemoteHost
     )
 
-    $exe = Resolve-RcdCursorExe -Config $Config
-    Write-RcdDebug "Cursor.exe: $exe"
+    $exe = Resolve-DocentCursorExe -Config $Config
+    Write-DocentDebug "Cursor.exe: $exe"
 
     # Idempotency / folder-uri no-op mitigation: when the workspace is ALREADY
     # open, `--new-window --folder-uri <same folder>` is a no-op (Cursor just
     # refocuses the existing window and no new window ever appears). Detect that
     # up front and adopt the existing window instead of waiting out a launch that
     # will never produce a new HWND.
-    $existing = Find-RcdCursorWindow -Config $Config -LeafName $LeafName
+    $existing = Find-DocentCursorWindow -Config $Config -LeafName $LeafName -RemoteHost $RemoteHost
     if ($existing) {
-        Write-RcdInfo "Workspace '$LeafName' already open (hwnd $($existing.Hwnd)); adopting existing window."
+        Write-DocentInfo "Workspace '$LeafName' already open (hwnd $($existing.Hwnd)); adopting existing window."
         return $existing.Hwnd
     }
 
@@ -102,37 +104,37 @@ function Open-RcdCursorWindow {
     $delay = [int]$Config.launchDelaySec
 
     for ($attempt = 1; $attempt -le ($retries + 1); $attempt++) {
-        $before = @(Get-RcdCursorWindows -Config $Config | Select-Object -ExpandProperty Hwnd)
-        Write-RcdInfo "Launching Cursor (attempt $attempt) for '$LeafName'."
-        Write-RcdDebug "$exe --new-window --folder-uri $Uri"
+        $before = @(Get-DocentCursorWindows -Config $Config | Select-Object -ExpandProperty Hwnd)
+        Write-DocentInfo "Launching Cursor (attempt $attempt) for '$LeafName'."
+        Write-DocentDebug "$exe --new-window --folder-uri $Uri"
 
         Start-Process -FilePath $exe -ArgumentList @('--new-window', '--folder-uri', $Uri) | Out-Null
 
         $deadline = (Get-Date).AddSeconds($timeout)
         while ((Get-Date) -lt $deadline) {
             Start-Sleep -Milliseconds 500
-            $current = Get-RcdCursorWindows -Config $Config
+            $current = Get-DocentCursorWindows -Config $Config
 
             # Prefer a brand-new window whose title matches this workspace.
             $match = $current | Where-Object {
                 ($before -notcontains $_.Hwnd) -and
-                (Test-RcdWorkspaceWindow -Title $_.Title -LeafName $LeafName -RemoteHost $Config.host)
+                (Test-DocentWorkspaceWindow -Title $_.Title -LeafName $LeafName -RemoteHost $RemoteHost)
             } | Select-Object -First 1
             if ($match) {
-                Write-RcdInfo "Matched window: '$($match.Title)' (hwnd $($match.Hwnd))."
+                Write-DocentInfo "Matched window: '$($match.Title)' (hwnd $($match.Hwnd))."
                 return $match.Hwnd
             }
         }
 
         # Fallback: any new window (title may not have rendered the folder yet).
-        $current = Get-RcdCursorWindows -Config $Config
+        $current = Get-DocentCursorWindows -Config $Config
         $newAny = $current | Where-Object { $before -notcontains $_.Hwnd } | Select-Object -First 1
         if ($newAny) {
-            Write-RcdWarn "No title match for '$LeafName'; using new window '$($newAny.Title)'."
+            Write-DocentWarn "No title match for '$LeafName'; using new window '$($newAny.Title)'."
             return $newAny.Hwnd
         }
 
-        Write-RcdWarn "No new Cursor window after ${timeout}s (likely the folder-uri hang). Retrying in ${delay}s."
+        Write-DocentWarn "No new Cursor window after ${timeout}s (likely the folder-uri hang). Retrying in ${delay}s."
         Start-Sleep -Seconds $delay
     }
 
@@ -140,13 +142,14 @@ function Open-RcdCursorWindow {
 }
 
 # Find an existing Cursor window for a workspace (host-aware title match).
-function Find-RcdCursorWindow {
+function Find-DocentCursorWindow {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][PSCustomObject]$Config,
-        [Parameter(Mandatory)][string]$LeafName
+        [Parameter(Mandatory)][string]$LeafName,
+        [string]$RemoteHost
     )
-    Get-RcdCursorWindows -Config $Config |
-        Where-Object { Test-RcdWorkspaceWindow -Title $_.Title -LeafName $LeafName -RemoteHost $Config.host } |
+    Get-DocentCursorWindows -Config $Config |
+        Where-Object { Test-DocentWorkspaceWindow -Title $_.Title -LeafName $LeafName -RemoteHost $RemoteHost } |
         Select-Object -First 1
 }

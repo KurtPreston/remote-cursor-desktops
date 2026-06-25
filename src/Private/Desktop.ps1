@@ -3,21 +3,22 @@ Set-StrictMode -Version Latest
 # Thin wrappers over the MScholtes VirtualDesktop module
 # (https://github.com/MScholtes/PSVirtualDesktop). Desktops are addressed by
 # NAME, not index, so they survive reshuffles when desktops are added/removed.
+# Windows backend only.
 
-function Assert-RcdVirtualDesktop {
+function Assert-DocentVirtualDesktop {
     if (Get-Module -Name VirtualDesktop) { return }
     if (-not (Get-Module -ListAvailable -Name VirtualDesktop)) {
         throw "The 'VirtualDesktop' module is not installed. Run: Install-Module VirtualDesktop -Scope CurrentUser"
     }
     Import-Module VirtualDesktop -ErrorAction Stop -DisableNameChecking
-    Write-RcdDebug "Imported VirtualDesktop module."
+    Write-DocentDebug "Imported VirtualDesktop module."
 }
 
 # Returns the desktop object for a given name, or $null if none exists.
-function Get-RcdDesktopByName {
+function Get-DocentDesktopByName {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)
-    Assert-RcdVirtualDesktop
+    Assert-DocentVirtualDesktop
 
     $count = Get-DesktopCount
     for ($i = 0; $i -lt $count; $i++) {
@@ -28,63 +29,63 @@ function Get-RcdDesktopByName {
 }
 
 # Find-or-create a desktop with the given name. Returns the desktop object.
-function Get-RcdOrNewDesktop {
+function Get-DocentOrNewDesktop {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)
-    Assert-RcdVirtualDesktop
+    Assert-DocentVirtualDesktop
 
-    $existing = Get-RcdDesktopByName -Name $Name
+    $existing = Get-DocentDesktopByName -Name $Name
     if ($existing) {
-        Write-RcdInfo "Reusing virtual desktop '$Name'."
+        Write-DocentInfo "Reusing virtual desktop '$Name'."
         return $existing
     }
 
-    Write-RcdInfo "Creating virtual desktop '$Name'."
+    Write-DocentInfo "Creating virtual desktop '$Name'."
     $d = New-Desktop
     Set-DesktopName -Desktop $d -Name $Name | Out-Null
     return $d
 }
 
-function Move-RcdWindowToDesktop {
+function Move-DocentWindowToDesktop {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Desktop,
         [Parameter(Mandatory)][IntPtr]$Hwnd
     )
-    Assert-RcdVirtualDesktop
+    Assert-DocentVirtualDesktop
     Move-Window -Desktop $Desktop -Hwnd $Hwnd | Out-Null
-    Write-RcdDebug "Moved window $Hwnd to desktop."
+    Write-DocentDebug "Moved window $Hwnd to desktop."
 }
 
-function Switch-RcdDesktop {
+function Switch-DocentDesktop {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Desktop)
-    Assert-RcdVirtualDesktop
+    Assert-DocentVirtualDesktop
     Switch-Desktop -Desktop $Desktop | Out-Null
 }
 
 # Returns the name of the desktop hosting a given window, or $null.
-function Get-RcdDesktopNameForWindow {
+function Get-DocentDesktopNameForWindow {
     [CmdletBinding()]
     param([Parameter(Mandatory)][IntPtr]$Hwnd)
-    Assert-RcdVirtualDesktop
+    Assert-DocentVirtualDesktop
     try {
         $d = Get-DesktopFromWindow -Hwnd $Hwnd
         if ($d) { return Get-DesktopName -Desktop $d }
     }
     catch {
-        Write-RcdDebug "Get-DesktopFromWindow failed for $Hwnd : $($_.Exception.Message)"
+        Write-DocentDebug "Get-DesktopFromWindow failed for $Hwnd : $($_.Exception.Message)"
     }
     return $null
 }
 
-function Remove-RcdDesktopByName {
+function Remove-DocentDesktopByName {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)
-    Assert-RcdVirtualDesktop
-    $d = Get-RcdDesktopByName -Name $Name
+    Assert-DocentVirtualDesktop
+    $d = Get-DocentDesktopByName -Name $Name
     if ($d) {
         Remove-Desktop -Desktop $d | Out-Null
-        Write-RcdInfo "Removed virtual desktop '$Name'."
+        Write-DocentInfo "Removed virtual desktop '$Name'."
     }
 }
