@@ -41,11 +41,17 @@ function Open-DocentWorkspace {
     Write-DocentInfo "open host=$Host name=$deskName leaf=$leaf"
     Write-DocentDebug "uri=$uri"
 
+    # Upsert the session registry (metadata + fallback color/ticket). Never let a
+    # registry hiccup fail the open/focus.
+    try { Register-DocentSessionOpen -Config $cfg -Name $nameVal -RemoteHost $Host -Path $Path -Uri $uri }
+    catch { Write-DocentWarn "registry upsert failed for '$nameVal': $($_.Exception.Message)" }
+
     # Focus-vs-open: adopt an existing window for this workspace if present.
     $existing = Find-DocentWindowHandle -Config $cfg -Leaf $leaf -RemoteHost $Host
     if ($existing) {
         Write-DocentInfo "Existing window for '$leaf'; focusing."
         Invoke-DocentFocusWindow -Config $cfg -Handle $existing -Name $deskName
+        try { Set-DocentSessionFocused -Config $cfg -Name $nameVal } catch { }
         Open-DocentWorkspaceLink -Config $cfg -Name $nameVal -DeskName $deskName -CursorHandle $existing -NoSwitch:$NoSwitch
         return [PSCustomObject]@{
             Action      = 'focused'
@@ -60,7 +66,10 @@ function Open-DocentWorkspace {
     $target = Invoke-DocentEnsureWorkspaceTarget -Config $cfg -Name $deskName
     $handle = Invoke-DocentOpenWindow -Config $cfg -Uri $uri -Leaf $leaf -RemoteHost $Host
     Invoke-DocentPlaceWindow -Config $cfg -Handle $handle -Name $deskName -Target $target
-    if (-not $NoSwitch) { Invoke-DocentFocusWindow -Config $cfg -Handle $handle -Name $deskName }
+    if (-not $NoSwitch) {
+        Invoke-DocentFocusWindow -Config $cfg -Handle $handle -Name $deskName
+        try { Set-DocentSessionFocused -Config $cfg -Name $nameVal } catch { }
+    }
     Open-DocentWorkspaceLink -Config $cfg -Name $nameVal -DeskName $deskName -CursorHandle $handle -NoSwitch:$NoSwitch
 
     [PSCustomObject]@{

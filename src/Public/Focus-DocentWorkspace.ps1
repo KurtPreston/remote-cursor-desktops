@@ -37,6 +37,7 @@ function Focus-DocentWorkspace {
     $handle = Find-DocentWindowHandle -Config $cfg -Leaf $leaf -RemoteHost $Host
     if ($handle) {
         Invoke-DocentFocusWindow -Config $cfg -Handle $handle -Name $deskName
+        try { Set-DocentSessionFocused -Config $cfg -Name $nameVal } catch { }
         Write-DocentInfo "Focused '$leaf'."
         return [PSCustomObject]@{ Action = 'focused'; Name = $deskName; Leaf = $leaf; Hwnd = $handle.Hwnd }
     }
