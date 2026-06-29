@@ -87,6 +87,7 @@ function Get-LauncherEntries {
                 Label  = $label
                 Sub    = ($sub -join '  ·  ')
                 Name   = $s.name
+                Host   = $s.host
                 Url    = $null
                 Color  = $s.color
                 Sort   = if ($s.needsFollowup) { 0 } elseif ($s.live) { 1 } else { 2 }
@@ -100,6 +101,7 @@ function Get-LauncherEntries {
                 Label  = $label
                 Sub    = (@($ticket, $pr.repo, $pr.state) | Where-Object { $_ } ) -join '  ·  '
                 Name   = $null
+                Host   = $null
                 Url    = $pr.url
                 Color  = $g.color
                 Sort   = 3
@@ -113,6 +115,7 @@ function Get-LauncherEntries {
                 Label  = "$ticket  $($g.summary)"
                 Sub    = (@($g.jiraStatus) | Where-Object { $_ }) -join ''
                 Name   = $null
+                Host   = $null
                 Url    = $g.jiraUrl
                 Color  = $g.color
                 Sort   = 4
@@ -143,8 +146,9 @@ function Invoke-LauncherEntry {
         try {
             $headers = @{ 'Content-Type' = 'application/json' }
             if ($script:Token) { $headers['Authorization'] = "Bearer $script:Token" }
+            $body = @{ name = $Entry.Name; host = $Entry.Host } | ConvertTo-Json
             Invoke-RestMethod -Uri "$script:BaseUrl/focus" -Method Post -Headers $headers `
-                -Body (@{ name = $Entry.Name } | ConvertTo-Json) -TimeoutSec 5 | Out-Null
+                -Body $body -TimeoutSec 5 | Out-Null
         }
         catch { }
     }
@@ -215,12 +219,17 @@ function Show-Launcher {
     $script:AllEntries = @(Get-LauncherEntries)
     $search.Text = ''
     Update-Results
-    $window.Visibility = 'Visible'
+    # Use Show()/Hide() (not Visibility) so WPF marks the window as "shown" --
+    # Activate()/Focus() throw on a window that was only made Visible. The HWND
+    # is already realized (EnsureHandle, for the hotkey), so Show() just surfaces
+    # it. Re-assert Topmost in case another app grabbed the foreground.
+    $window.Show()
+    $window.Topmost = $true
     $window.Activate() | Out-Null
     $search.Focus() | Out-Null
 }
 
-function Hide-Launcher { $window.Visibility = 'Hidden' }
+function Hide-Launcher { $window.Hide() }
 
 function Invoke-Selected {
     $sel = $results.SelectedItem
