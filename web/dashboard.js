@@ -76,6 +76,7 @@ function renderSessionRow(s) {
   row.appendChild(el("span", "spacer"));
 
   if (s.needsFollowup) row.appendChild(el("span", "pill followup", "needs follow-up"));
+  else if (s.status === "working") row.appendChild(el("span", "pill working", "working"));
   else row.appendChild(el("span", "pill status", s.live ? "idle" : "closed"));
 
   if (s.lastActivity) row.appendChild(el("span", "meta", timeAgo(s.lastActivity)));

@@ -213,6 +213,12 @@ body {
   border-color: color-mix(in srgb, var(--amber) 40%, transparent);
 }
 
+.pill.working {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 .followup-dot {
   width: 8px;
   height: 8px;

@@ -148,7 +148,7 @@ function Invoke-DocentRequest {
             Send-DocentResponse -Context $Context -StatusCode 400 -Object @{ ok = $false; error = 'event must include name or path' }
             return
         }
-        $validKinds = @('agent-stop', 'session-start', 'session-end', 'shell-done')
+        $validKinds = @('prompt-submit', 'agent-stop', 'session-start', 'session-end', 'shell-done')
         if (-not $kind -or ($validKinds -notcontains $kind)) {
             Send-DocentResponse -Context $Context -StatusCode 400 -Object @{ ok = $false; error = "kind must be one of: $($validKinds -join ', ')" }
             return

@@ -4,10 +4,11 @@
 # (127.0.0.1:<port> on the dev box -> docent on the workstation).
 #
 # Wire it into ~/.cursor/hooks.json for the events docent cares about:
+#   beforeSubmitPrompt  -> prompt-submit (a turn started -> "working", clears follow-up)
 #   stop                -> agent-stop   (a turn finished -> maybe needs follow-up)
 #   sessionStart        -> session-start (also reads the exact title-bar color)
 #   sessionEnd          -> session-end
-#   afterShellExecution -> shell-done   (a long shell command finished)
+#   afterShellExecution -> shell-done   (a shell command finished; activity only)
 #
 # The docent event "kind" is taken from the first argument when present (e.g.
 # `docent-notify.sh agent-stop`), otherwise mapped from the stdin
@@ -31,6 +32,7 @@ kind="${1:-}"
 if [ -z "$kind" ]; then
   event="$(json_get '.hook_event_name')"
   case "$event" in
+    beforeSubmitPrompt)  kind="prompt-submit" ;;
     stop)                kind="agent-stop" ;;
     afterShellExecution) kind="shell-done" ;;
     sessionStart)        kind="session-start" ;;

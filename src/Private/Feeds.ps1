@@ -131,13 +131,19 @@ function New-DocentSessionRow {
     $hostVal = if ($Host) { $Host } elseif ($Record -and ($p -contains 'host')) { [string]$Record.host } else { $null }
     $pathVal = if ($Record -and ($p -contains 'path')) { [string]$Record.path } else { $null }
 
-    $needsFollowup = if ($Record) { [bool](Test-DocentNeedsFollowup -Record $Record) } else { $false }
-    $status = if ($needsFollowup) { 'needs-followup' } elseif ($Live) { 'idle' } else { 'idle' }
+    $status = if ($Record) { Get-DocentSessionStatus -Record $Record } else { 'idle' }
+    $needsFollowup = ($status -eq 'needs-followup')
 
+    # Last activity = the most RECENT of the known timestamps (not just the first
+    # present), so the "x ago" label reflects real activity for the status shown.
     $lastActivity = $null
     if ($Record) {
-        foreach ($f in @('lastAgentStopAt', 'lastShellDoneAt', 'lastFocusedAt', 'lastOpenedAt', 'createdAt')) {
-            if (($p -contains $f) -and $Record.$f) { $lastActivity = [string]$Record.$f; break }
+        $latest = $null
+        foreach ($f in @('lastPromptAt', 'lastAgentStopAt', 'lastShellDoneAt', 'lastFocusedAt', 'lastOpenedAt', 'createdAt')) {
+            if (($p -contains $f) -and $Record.$f) {
+                $t = ConvertFrom-DocentIso $Record.$f
+                if ($t -and (-not $latest -or $t -gt $latest)) { $latest = $t; $lastActivity = [string]$Record.$f }
+            }
         }
     }
 

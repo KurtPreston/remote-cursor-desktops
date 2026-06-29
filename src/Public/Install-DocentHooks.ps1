@@ -12,8 +12,9 @@ SSHes out -- the SAME workstation->devbox direction that already creates the
 reverse tunnel, key-based -- and idempotently:
   1. ensures ~/.cursor/hooks exists and copies hooks/docent-notify.sh there,
   2. drops a mode-600 ~/.cursor/docent-token (the shared secret the hook sends),
-  3. MERGES the docent entries into ~/.cursor/hooks.json (stop / sessionStart /
-     sessionEnd / afterShellExecution), preserving every other existing hook.
+  3. MERGES the docent entries into ~/.cursor/hooks.json (beforeSubmitPrompt /
+     stop / sessionStart / sessionEnd / afterShellExecution), preserving every
+     other existing hook.
 
 Re-runnable: existing docent entries are replaced (not duplicated) and unrelated
 hooks are untouched. Runtime needs no SSH-out; this is setup only.
@@ -114,6 +115,7 @@ jq '
     .hooks[ev] = (((.hooks[ev]) // []) | map(select((.command // "") | contains("docent-notify.sh") | not)) + [{command: cmd, timeout: 5}]);
   .version = (.version // 1)
   | .hooks = (.hooks // {})
+  | addhook("beforeSubmitPrompt"; "./hooks/docent-notify.sh prompt-submit")
   | addhook("stop"; "./hooks/docent-notify.sh agent-stop")
   | addhook("sessionStart"; "./hooks/docent-notify.sh session-start")
   | addhook("sessionEnd"; "./hooks/docent-notify.sh session-end")

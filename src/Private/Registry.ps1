@@ -248,6 +248,7 @@ function Update-DocentSessionRecord {
             ticket          = $null
             createdAt       = Get-DocentNowIso
             lastOpenedAt    = $null
+            lastPromptAt    = $null
             lastAgentStopAt = $null
             lastShellDoneAt = $null
             lastFocusedAt   = $null
@@ -329,6 +330,7 @@ function Set-DocentSessionEvent {
     $now = Get-DocentNowIso
     $patch = @{}
     switch ($Kind) {
+        'prompt-submit' { $patch['lastPromptAt'] = $now }
         'agent-stop' { $patch['lastAgentStopAt'] = $now }
         'shell-done' { $patch['lastShellDoneAt'] = $now }
         'session-start' { $patch['lastOpenedAt'] = $now }
@@ -382,22 +384,48 @@ function ConvertFrom-DocentIso {
     catch { return $null }
 }
 
-# needsFollowup = the most recent agent-stop / shell-done happened AFTER the last
-# focus (or there has been activity but never a focus). Focusing clears it.
-function Test-DocentNeedsFollowup {
+# Read an ISO field off a record (or $null if absent/empty).
+function Get-DocentRecordTime {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Record, [Parameter(Mandatory)][string]$Field)
+    if ($Record.PSObject.Properties.Name -contains $Field) { return ConvertFrom-DocentIso $Record.$Field }
+    return $null
+}
+
+# Derive a session's activity status from its timestamps:
+#   working        - a prompt was submitted and the turn has not stopped yet
+#                    (lastPromptAt is at/after lastAgentStopAt).
+#   needs-followup - the latest turn STOPPED and you have not re-engaged since:
+#                    lastAgentStopAt is later than both the last prompt and the
+#                    last docent-focus. (Submitting a new prompt or focusing via
+#                    docent both count as re-engaging, so it self-clears.)
+#   idle           - anything else (never ran a turn, or already handled).
+# Note: shell-done is intentionally NOT a follow-up trigger -- it fires on every
+# agent shell command (including mid-turn), so it is far too noisy; it is kept
+# only for "last activity" display.
+function Get-DocentSessionStatus {
     [CmdletBinding()]
     param([Parameter(Mandatory)]$Record)
 
-    $props = $Record.PSObject.Properties.Name
-    $stopAt = if ($props -contains 'lastAgentStopAt') { ConvertFrom-DocentIso $Record.lastAgentStopAt } else { $null }
-    $shellAt = if ($props -contains 'lastShellDoneAt') { ConvertFrom-DocentIso $Record.lastShellDoneAt } else { $null }
-    $focusAt = if ($props -contains 'lastFocusedAt') { ConvertFrom-DocentIso $Record.lastFocusedAt } else { $null }
+    $promptAt = Get-DocentRecordTime -Record $Record -Field 'lastPromptAt'
+    $stopAt = Get-DocentRecordTime -Record $Record -Field 'lastAgentStopAt'
+    $focusAt = Get-DocentRecordTime -Record $Record -Field 'lastFocusedAt'
 
-    $activity = $null
-    foreach ($t in @($stopAt, $shellAt)) {
-        if ($t -and (-not $activity -or $t -gt $activity)) { $activity = $t }
+    if (-not $stopAt) {
+        # No turn has ever finished. If a prompt is outstanding, it's working.
+        if ($promptAt) { return 'working' }
+        return 'idle'
     }
-    if (-not $activity) { return $false }
-    if (-not $focusAt) { return $true }
-    return ($activity -gt $focusAt)
+    # A prompt newer than the last stop means a new turn is in flight.
+    if ($promptAt -and $promptAt -ge $stopAt) { return 'working' }
+    # The turn has stopped: follow-up unless you've focused it via docent since.
+    if ($focusAt -and $focusAt -ge $stopAt) { return 'idle' }
+    return 'needs-followup'
+}
+
+# Back-compat boolean used by grouping/aggregation.
+function Test-DocentNeedsFollowup {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Record)
+    return ((Get-DocentSessionStatus -Record $Record) -eq 'needs-followup')
 }
