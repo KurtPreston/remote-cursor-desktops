@@ -1,0 +1,10 @@
+// Out-of-the-box VSCode profile (mirrors webserver.DefaultProfiles()).
+// Drop this object under "profiles": { "vscode": { ... } } in your config to
+// override the built-in defaults.
+{
+  "process": "Code",
+  "exe": "", // "" = per-OS auto-detection (code / Code.exe / Visual Studio Code.app)
+  "launchArgs": ["--new-window", "--folder-uri", "{uri}"],
+  "localUri": "file://{path}",
+  "remoteUri": "vscode-remote://ssh-remote+{host}{path}"
+}

@@ -166,7 +166,7 @@ components:
 
     OpenRequest:
       type: object
-      required: [host, path]
+      required: [path]
       properties:
         host:
           type: string

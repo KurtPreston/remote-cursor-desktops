@@ -1,0 +1,10 @@
+// Out-of-the-box Cursor profile (mirrors webserver.DefaultProfiles()).
+// Drop this object under "profiles": { "cursor": { ... } } in your config to
+// override the built-in defaults.
+{
+  "process": "Cursor",
+  "exe": "", // "" = per-OS auto-detection (Cursor.exe / Cursor.app / `cursor` on PATH)
+  "launchArgs": ["--new-window", "--folder-uri", "{uri}"],
+  "localUri": "file://{path}",
+  "remoteUri": "vscode-remote://ssh-remote+{host}{path}"
+}

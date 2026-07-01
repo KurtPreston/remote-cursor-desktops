@@ -1,0 +1,41 @@
+{
+  // How wsmd binds and secures its listener:
+  //   "local"   - binds 127.0.0.1, plain HTTP, Bearer token required.
+  //   "ssh"     - binds 127.0.0.1, reached via an SSH reverse tunnel, token required.
+  //   "network" - configurable bind, HTTPS required (tls below), explicit opt-in.
+  "mode": "local",
+
+  // Bind address. Must be loopback for local/ssh; may be routable for network.
+  "bind": "127.0.0.1",
+  "port": 39788,
+
+  // Bearer token, required in every mode. Prefer the $WSM_TOKEN env var, which
+  // overrides this field and keeps the secret out of the config file.
+  "token": "change-me",
+
+  // Required only when mode = "network".
+  "tls": { "cert": "", "key": "" },
+
+  // Which IDE profile below to use for /open.
+  "ide": "cursor",
+
+  // Config-driven IDE opening. "cursor" and "vscode" ship out of the box; add
+  // or override entries here. {uri} in launchArgs is the resolved folder URI,
+  // built from remoteUri when a host is present, else localUri.
+  "profiles": {
+    "cursor": {
+      "process": "Cursor",
+      "exe": "", // "" = per-OS auto-detection
+      "launchArgs": ["--new-window", "--folder-uri", "{uri}"],
+      "localUri": "file://{path}",
+      "remoteUri": "vscode-remote://ssh-remote+{host}{path}"
+    },
+    "vscode": {
+      "process": "Code",
+      "exe": "",
+      "launchArgs": ["--new-window", "--folder-uri", "{uri}"],
+      "localUri": "file://{path}",
+      "remoteUri": "vscode-remote://ssh-remote+{host}{path}"
+    }
+  }
+}
