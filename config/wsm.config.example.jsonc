@@ -19,6 +19,22 @@
   // Which IDE profile below to use for /open.
   "ide": "cursor",
 
+  // Optional: let wsmd establish and maintain its OWN reverse SSH tunnel to the
+  // dev box, so the dev box can reach wsmd without relying on an external SSH
+  // session (e.g. Cursor Remote-SSH) to carry the forward. Omit this block (or
+  // set enabled=false) to keep the previous behavior. See the README.
+  // "tunnel": {
+  //   "enabled": true,
+  //   "host": "dev-box.example.com",       // dev box to dial (required)
+  //   "port": 22,                          // ssh port (default 22)
+  //   "user": "me",                        // ssh user (default: current OS user)
+  //   "identityFile": "~/.ssh/id_ed25519", // preferred; else ssh-agent
+  //   "knownHostsFile": "~/.ssh/known_hosts", // host-key verification
+  //   "remoteBind": "127.0.0.1",           // bind on the dev box (loopback)
+  //   "remotePort": 39788,                 // reverse listen port (default = port)
+  //   "keepAliveSec": 30                   // ssh keepalive interval
+  // },
+
   // Config-driven IDE opening. "cursor" and "vscode" ship out of the box; add
   // or override entries here. {uri} in launchArgs is the resolved folder URI,
   // built from remoteUri when a host is present, else localUri.

@@ -110,8 +110,43 @@ curl -X POST http://127.0.0.1:39788/open \
 
 ## Reverse SSH tunnel (ssh mode)
 
-The dev box reaches `wsmd`'s loopback port through a reverse tunnel. In the
-**workstation's** `~/.ssh/config` for the dev host:
+The dev box reaches `wsmd`'s loopback port through a reverse tunnel. There are
+two ways to establish it; you can use either (or both — they coexist).
+
+### Option A — wsm owns the tunnel (recommended)
+
+Add a `tunnel` block to the config and `wsmd` dials the dev box itself and opens
+the reverse forward, so the pipe is live whenever `wsmd` runs. Because `wsmd`
+autostarts at login (launchd / Scheduled Task), this works on a cold boot with
+no editor attached — it is **not** tied to a Cursor Remote-SSH session.
+
+```jsonc
+"tunnel": {
+  "enabled": true,
+  "host": "dev-box.example.com",       // the dev box to dial
+  "user": "me",
+  "identityFile": "~/.ssh/id_ed25519"  // preferred for a login-launched daemon
+}
+```
+
+`wsmd` verifies the dev box against `~/.ssh/known_hosts` (override with
+`knownHostsFile`) and authenticates with `identityFile` and/or a running
+ssh-agent. For a daemon started at login, prefer an `identityFile` — an
+interactive ssh-agent may not be present in the service's environment (and on
+Windows the agent uses a named pipe rather than `SSH_AUTH_SOCK`). The reverse
+listener binds the dev box's loopback (`remoteBind`/`remotePort`, defaulting to
+`127.0.0.1` and the local `port`). See the full field list in
+[`config/wsm.config.example.jsonc`](./config/wsm.config.example.jsonc).
+
+If another SSH session (e.g. Cursor Remote-SSH, option B) already holds the same
+reverse forward, `wsmd`'s bind is refused; it logs that and retries with
+backoff while that session keeps reaching this same `wsmd`. Nothing breaks, and
+a dropped tunnel is retried rather than being fatal.
+
+### Option B — an external SSH session carries it
+
+Put the forward in the **workstation's** `~/.ssh/config` for the dev host, and
+any SSH session to that host (including Cursor Remote-SSH) carries it:
 
 ```sshconfig
 Host devbox
@@ -120,7 +155,8 @@ Host devbox
   RemoteForward 39788 127.0.0.1:39788
 ```
 
-Now the dev box's `POST 127.0.0.1:39788` is forwarded back to `wsmd`.
+Now the dev box's `POST 127.0.0.1:39788` is forwarded back to `wsmd` — but only
+while such a session is connected.
 
 ## Install / autostart
 
