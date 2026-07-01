@@ -1,8 +1,6 @@
 # Local config (may contain host-specific paths / secrets)
 wsm.config.json
 wsm.config.jsonc
-docent.config.json
-docent.config.jsonc
 
 # Go build output
 /bin/wsm-macos
