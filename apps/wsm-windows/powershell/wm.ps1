@@ -19,7 +19,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('list', 'open', 'focus')]
+    [ValidateSet('list', 'open', 'open-url', 'focus')]
     [string]$Action,
 
     # Window/process matching, config-driven via the active IDEProfile.
@@ -38,6 +38,11 @@ param(
     # open / focus: the SSH host a remote workspace was opened against.
     [string]$RemoteHost,
 
+    # open-url
+    [string]$TargetUrl,
+    [string]$BrowserExe,
+    [string]$BrowserProcessName,
+
     # Folder-uri launch hang mitigations (see Open-WsmCursorWindow).
     [int]$LaunchRetries = 2,
     [int]$LaunchTimeoutSec = 25,
@@ -51,15 +56,18 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Native.ps1')
 . (Join-Path $PSScriptRoot 'Desktop.ps1')
 . (Join-Path $PSScriptRoot 'Window.ps1')
+. (Join-Path $PSScriptRoot 'Browser.ps1')
 
 $script:NotFoundExitCode = 44
 
 $Config = [PSCustomObject]@{
-    processName      = $Process
-    cursorExe        = if ($Exe) { $Exe } else { $null }
-    launchRetries    = $LaunchRetries
-    launchTimeoutSec = $LaunchTimeoutSec
-    launchDelaySec   = $LaunchDelaySec
+    processName        = $Process
+    cursorExe          = if ($Exe) { $Exe } else { $null }
+    browserExe         = if ($BrowserExe) { $BrowserExe } else { $null }
+    browserProcessName = if ($BrowserProcessName) { $BrowserProcessName } else { $null }
+    launchRetries      = $LaunchRetries
+    launchTimeoutSec   = $LaunchTimeoutSec
+    launchDelaySec     = $LaunchDelaySec
 }
 
 # Writes exactly one compact JSON object to stdout.
@@ -140,10 +148,40 @@ function Invoke-WsmFocus {
     Write-WsmResult @{ ok = $true; action = 'focused'; name = $target }
 }
 
+function Invoke-WsmOpenUrl {
+    if (-not $Name) { throw "-Name is required for -Action open-url" }
+    if (-not $TargetUrl) { throw "-TargetUrl is required for -Action open-url" }
+
+    $desktop = Get-WsmOrNewDesktop -Name $Name
+
+    $existingBrowser = Find-WsmBrowserWindowOnDesktop -Config $Config -DeskName $Name
+    if ($existingBrowser) {
+        Write-WsmInfo "Browser window already on desktop '$Name'; leaving in place."
+        $cursor = Find-WsmCursorWindow -Config $Config -LeafName (Get-WsmLeafName -Path $Name)
+        if ($cursor) { Set-WsmForegroundWindow -Hwnd $cursor.Hwnd }
+        Write-WsmResult @{ ok = $true; action = 'present'; name = $Name }
+        return
+    }
+
+    $hwnd = Open-WsmBrowserWindow -Config $Config -Url $TargetUrl
+    if ($hwnd -ne [IntPtr]::Zero) {
+        Move-WsmWindowToDesktop -Desktop $desktop -Hwnd $hwnd
+    }
+
+    $cursor = Find-WsmCursorWindow -Config $Config -LeafName (Get-WsmLeafName -Path $Name)
+    if ($cursor) {
+        Switch-WsmDesktop -Desktop $desktop
+        Set-WsmForegroundWindow -Hwnd $cursor.Hwnd
+    }
+
+    Write-WsmResult @{ ok = $true; action = 'opened'; name = $Name }
+}
+
 try {
     switch ($Action) {
         'list' { Invoke-WsmList }
         'open' { Invoke-WsmOpen }
+        'open-url' { Invoke-WsmOpenUrl }
         'focus' { Invoke-WsmFocus }
     }
 }

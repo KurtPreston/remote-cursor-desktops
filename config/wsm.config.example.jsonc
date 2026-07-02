@@ -35,6 +35,12 @@
   //   "keepAliveSec": 30                   // ssh keepalive interval
   // },
 
+  // --- Companion URLs (optional) ---
+  // Browser used to open companion URLs via POST /open-url. Auto-detected when
+  // omitted: Chrome, then Edge, then Brave on Windows; system default on macOS.
+  // "browserExe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  // "browserProcessName": "chrome",
+
   // Config-driven IDE opening. "cursor" and "vscode" ship out of the box; add
   // or override entries here. {uri} in launchArgs is the resolved folder URI,
   // built from remoteUri when a host is present, else localUri.

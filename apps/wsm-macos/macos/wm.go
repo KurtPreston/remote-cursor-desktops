@@ -48,6 +48,17 @@ func (m *Manager) Open(_ context.Context, cmd webserver.OpenCommand) (api.Result
 	return api.Result{OK: true, Action: "opened", Name: cmd.Name}, nil
 }
 
+// OpenURL opens a URL in a browser window (window-only on macOS) and
+// best-effort re-foregrounds the IDE workspace window named by cmd.Name.
+func (m *Manager) OpenURL(_ context.Context, cmd webserver.OpenURLCommand) (api.Result, error) {
+	if err := openBrowser(cmd.BrowserExe, cmd.URL); err != nil {
+		return api.Result{}, err
+	}
+	proc := processName(cmd.Profile)
+	_, _ = focusWindow(proc, cmd.Name)
+	return api.Result{OK: true, Action: "opened", Name: cmd.Name}, nil
+}
+
 // Focus raises a window whose title contains the target name (or id).
 func (m *Manager) Focus(_ context.Context, cmd webserver.FocusCommand) (api.Result, error) {
 	target := cmd.Name
@@ -175,6 +186,15 @@ func openWorkspace(profile webserver.IDEProfile, uri, leaf string) error {
 		}
 	}
 	return nil
+}
+
+// openBrowser launches a URL in a new browser window. When browserExe is set
+// it is used via `open -na`; otherwise the system default browser is used.
+func openBrowser(browserExe, url string) error {
+	if browserExe != "" {
+		return exec.Command("open", "-na", browserExe, "--args", "--new-window", url).Start()
+	}
+	return exec.Command("open", url).Start()
 }
 
 func launchArgs(profile webserver.IDEProfile, uri string) []string {

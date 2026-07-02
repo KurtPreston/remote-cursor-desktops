@@ -30,6 +30,12 @@ type OpenRequest struct {
 	URI  string `json:"uri,omitempty"`
 }
 
+// OpenURLRequest is the body for POST /open-url.
+type OpenURLRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
 // FocusRequest is the body for POST /focus.
 type FocusRequest struct {
 	ID   string `json:"id,omitempty"`

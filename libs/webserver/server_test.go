@@ -13,10 +13,12 @@ import (
 
 // stubWM is a scriptable WindowManager for handler tests.
 type stubWM struct {
-	windows  []api.Window
-	lastOpen OpenCommand
-	openErr  error
-	focusErr error
+	windows     []api.Window
+	lastOpen    OpenCommand
+	lastOpenURL OpenURLCommand
+	openErr     error
+	focusErr    error
+	openURLErr  error
 }
 
 func (s *stubWM) List(context.Context, IDEProfile) ([]api.Window, error) {
@@ -34,6 +36,13 @@ func (s *stubWM) Focus(_ context.Context, cmd FocusCommand) (api.Result, error) 
 		return api.Result{}, s.focusErr
 	}
 	return api.Result{OK: true, Action: "focused", Name: cmd.Name}, nil
+}
+func (s *stubWM) OpenURL(_ context.Context, cmd OpenURLCommand) (api.Result, error) {
+	s.lastOpenURL = cmd
+	if s.openURLErr != nil {
+		return api.Result{}, s.openURLErr
+	}
+	return api.Result{OK: true, Action: "opened", Name: cmd.Name}, nil
 }
 
 func testConfig() Config {

@@ -11,7 +11,10 @@ import (
 )
 
 // fakeWM is a minimal WindowManager for exercising the client end to end.
-type fakeWM struct{ opened api.OpenRequest }
+type fakeWM struct {
+	opened    api.OpenRequest
+	openedURL api.OpenURLRequest
+}
 
 func (f *fakeWM) List(context.Context, webserver.IDEProfile) ([]api.Window, error) {
 	return []api.Window{{ID: "1", Title: "proj - Cursor", App: "Cursor"}}, nil
@@ -25,6 +28,10 @@ func (f *fakeWM) Focus(_ context.Context, cmd webserver.FocusCommand) (api.Resul
 		return api.Result{}, webserver.ErrWindowNotFound
 	}
 	return api.Result{OK: true, Action: "focused", Name: cmd.Name}, nil
+}
+func (f *fakeWM) OpenURL(_ context.Context, cmd webserver.OpenURLCommand) (api.Result, error) {
+	f.openedURL = api.OpenURLRequest{Name: cmd.Name, URL: cmd.URL}
+	return api.Result{OK: true, Action: "opened", Name: cmd.Name}, nil
 }
 
 func newServer(t *testing.T, wm webserver.WindowManager) *httptest.Server {
@@ -63,6 +70,12 @@ func TestClientRoundTrip(t *testing.T) {
 
 	if err := c.Focus(ctx, wmclient.FocusRequest{Name: "proj"}); err != nil {
 		t.Fatalf("Focus: %v", err)
+	}
+	if err := c.OpenURL(ctx, wmclient.OpenURLRequest{Name: "proj", URL: "https://example.com"}); err != nil {
+		t.Fatalf("OpenURL: %v", err)
+	}
+	if wm.openedURL.URL != "https://example.com" {
+		t.Fatalf("OpenURL url = %q", wm.openedURL.URL)
 	}
 	if err := c.Focus(ctx, wmclient.FocusRequest{Name: "ghost"}); err == nil {
 		t.Fatal("expected error focusing a missing window")

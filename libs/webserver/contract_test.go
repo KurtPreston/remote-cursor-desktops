@@ -141,6 +141,8 @@ func TestContractCompliance(t *testing.T) {
 	validateExchange(t, router, srv.URL, "GET", "/windows", tok, "", http.StatusOK)
 	validateExchange(t, router, srv.URL, "POST", "/open", tok,
 		`{"host":"devbox","path":"/home/me/Code/proj","name":"proj"}`, http.StatusOK)
+	validateExchange(t, router, srv.URL, "POST", "/open-url", tok,
+		`{"name":"proj","url":"https://example.com/ticket"}`, http.StatusOK)
 
 	// Focus miss must be a spec-compliant 404 Error body.
 	wm.focusErr = ErrWindowNotFound

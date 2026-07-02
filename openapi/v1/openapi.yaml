@@ -87,6 +87,34 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /open-url:
+    post:
+      tags: [windows]
+      summary: Open a companion URL on a workspace desktop
+      description: |
+        Open a URL in a browser window on the virtual desktop named for the
+        workspace. The browser window is placed on the desktop but the IDE
+        window stays frontmost when possible. If a browser window already
+        sits on that desktop it is left in place (focus-or-open).
+      operationId: openURL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenURLRequest"
+      responses:
+        "200":
+          description: The URL was opened or an existing browser window was present.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /focus:
     post:
       tags: [windows]
@@ -180,6 +208,17 @@ components:
         uri:
           type: string
           description: Explicit folder URI. Overrides the config profile's URI templating.
+
+    OpenURLRequest:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          type: string
+          description: Workspace/desktop name. The browser window is placed on this desktop.
+        url:
+          type: string
+          description: The URL to open in a new browser window.
 
     FocusRequest:
       type: object

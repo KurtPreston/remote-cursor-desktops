@@ -90,6 +90,30 @@ func (m *Manager) Open(ctx context.Context, cmd webserver.OpenCommand) (api.Resu
 	return parseResult(out)
 }
 
+// OpenURL opens a URL in a browser window on the workspace's virtual desktop.
+func (m *Manager) OpenURL(ctx context.Context, cmd webserver.OpenURLCommand) (api.Result, error) {
+	args := []string{
+		"-Action", "open-url",
+		"-Process", processName(cmd.Profile),
+		"-Name", cmd.Name,
+		"-TargetUrl", cmd.URL,
+	}
+	if cmd.Profile.Exe != "" {
+		args = append(args, "-Exe", cmd.Profile.Exe)
+	}
+	if cmd.BrowserExe != "" {
+		args = append(args, "-BrowserExe", cmd.BrowserExe)
+	}
+	if cmd.BrowserProcessName != "" {
+		args = append(args, "-BrowserProcessName", cmd.BrowserProcessName)
+	}
+	out, err := m.run(ctx, args)
+	if err != nil {
+		return api.Result{}, err
+	}
+	return parseResult(out)
+}
+
 // Focus switches to the window's desktop (or the one named after it) and
 // raises it. Returns webserver.ErrWindowNotFound when nothing matches.
 func (m *Manager) Focus(ctx context.Context, cmd webserver.FocusCommand) (api.Result, error) {

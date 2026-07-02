@@ -22,6 +22,7 @@ type (
 	Window          = api.Window
 	WindowsResponse = api.WindowsResponse
 	OpenRequest     = api.OpenRequest
+	OpenURLRequest  = api.OpenURLRequest
 	FocusRequest    = api.FocusRequest
 	Result          = api.Result
 )
@@ -83,6 +84,11 @@ func (c *Client) ListWindows(ctx context.Context) ([]Window, error) {
 // Open opens (or adopts) a workspace (POST /open).
 func (c *Client) Open(ctx context.Context, body OpenRequest) error {
 	return c.post(ctx, "/open", body)
+}
+
+// OpenURL opens a companion URL on a workspace desktop (POST /open-url).
+func (c *Client) OpenURL(ctx context.Context, body OpenURLRequest) error {
+	return c.post(ctx, "/open-url", body)
 }
 
 // Focus focuses an existing workspace window (POST /focus).

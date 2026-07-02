@@ -49,6 +49,7 @@ contract. Every endpoint except `GET /health` requires a Bearer token.
 | `GET /health` | none | liveness probe (returns `ok`) |
 | `GET /windows` | token | list open workspace windows |
 | `POST /open` | token | open (or adopt) a workspace: `{host, path, name?, uri?}` |
+| `POST /open-url` | token | open a companion URL on a workspace desktop: `{name, url}` |
 | `POST /focus` | token | focus an existing window: `{id?, name?, host?}` (404 if none) |
 
 ## Modes
@@ -106,6 +107,12 @@ curl -X POST http://127.0.0.1:39788/open \
   -H 'authorization: Bearer <token>' \
   -H 'content-type: application/json' \
   -d '{"host":"devbox","path":"/home/me/Code/proj","name":"proj"}'
+
+# open a companion URL on the workspace desktop (e.g. a JIRA ticket page)
+curl -X POST http://127.0.0.1:39788/open-url \
+  -H 'authorization: Bearer <token>' \
+  -H 'content-type: application/json' \
+  -d '{"name":"proj","url":"https://jira.example.com/browse/PROJ-123"}'
 ```
 
 ## Reverse SSH tunnel (ssh mode)

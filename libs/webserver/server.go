@@ -37,11 +37,21 @@ type FocusCommand struct {
 	Profile IDEProfile
 }
 
+// OpenURLCommand is a resolved open-url request handed to a WindowManager.
+type OpenURLCommand struct {
+	Name               string
+	URL                string
+	Profile            IDEProfile
+	BrowserExe         string
+	BrowserProcessName string
+}
+
 // WindowManager is the platform-specific behavior each app supplies.
 type WindowManager interface {
 	List(ctx context.Context, profile IDEProfile) ([]api.Window, error)
 	Open(ctx context.Context, cmd OpenCommand) (api.Result, error)
 	Focus(ctx context.Context, cmd FocusCommand) (api.Result, error)
+	OpenURL(ctx context.Context, cmd OpenURLCommand) (api.Result, error)
 }
 
 type server struct {
@@ -61,6 +71,7 @@ func NewHandler(cfg Config, wm WindowManager) (http.Handler, error) {
 	mux.HandleFunc("/health", methodGuard(http.MethodGet, s.health))
 	mux.HandleFunc("/windows", methodGuard(http.MethodGet, requireBearer(cfg.Token, cfg.CORSOrigin, s.windows)))
 	mux.HandleFunc("/open", methodGuard(http.MethodPost, requireBearer(cfg.Token, cfg.CORSOrigin, s.open)))
+	mux.HandleFunc("/open-url", methodGuard(http.MethodPost, requireBearer(cfg.Token, cfg.CORSOrigin, s.openURL)))
 	mux.HandleFunc("/focus", methodGuard(http.MethodPost, requireBearer(cfg.Token, cfg.CORSOrigin, s.focus)))
 
 	return withCORS(cfg.CORSOrigin, mux), nil
@@ -157,6 +168,35 @@ func (s *server) open(w http.ResponseWriter, r *http.Request) {
 		Profile: profile,
 	}
 	res, err := s.wm.Open(r.Context(), cmd)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *server) openURL(w http.ResponseWriter, r *http.Request) {
+	var req api.OpenURLRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.URL == "" {
+		writeError(w, http.StatusBadRequest, "url is required")
+		return
+	}
+	profile, _ := s.cfg.ActiveProfile()
+	res, err := s.wm.OpenURL(r.Context(), OpenURLCommand{
+		Name:               req.Name,
+		URL:                req.URL,
+		Profile:            profile,
+		BrowserExe:         s.cfg.BrowserExe,
+		BrowserProcessName: s.cfg.BrowserProcessName,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

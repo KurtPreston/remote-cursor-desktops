@@ -84,6 +84,13 @@ type Config struct {
 	Profiles   map[string]IDEProfile `json:"profiles"`
 	CORSOrigin string                `json:"corsOrigin,omitempty"`
 	Tunnel     *TunnelConfig         `json:"tunnel,omitempty"`
+
+	// BrowserExe is an explicit browser launcher for companion URLs opened via
+	// POST /open-url. Empty means per-OS auto-detection.
+	BrowserExe string `json:"browserExe,omitempty"`
+	// BrowserProcessName is the process name used to enumerate browser windows
+	// (Windows). Defaults to the browserExe filename without extension.
+	BrowserProcessName string `json:"browserProcessName,omitempty"`
 }
 
 // DefaultProfiles returns the out-of-the-box IDE profiles (Cursor + VSCode).
